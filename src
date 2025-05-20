@@ -1,0 +1,144 @@
+// BankingSystemWithDB.java
+// Java GUI Banking System with MySQL Integration
+
+import java.awt.*;
+import java.awt.event.*;
+import java.sql.*;
+import javax.swing.*;
+
+public class BankingSystemWithDB extends JFrame implements ActionListener {
+
+    private JTextField accNumberField, nameField, amountField;
+    private JTextArea resultArea;
+    private JComboBox<String> accTypeBox;
+    private JButton createBtn, depositBtn, withdrawBtn, showBtn;
+
+    private final String DB_URL = "jdbc:mysql://localhost:3306/bank_db";
+    private final String USER = "root";
+    private final String PASS = "Astitva24@";
+
+    public BankingSystemWithDB() {
+        setTitle("Banking System - GUI + MySQL");
+        setSize(500, 500);
+        setLayout(new GridLayout(10, 1));
+
+        accNumberField = new JTextField();
+        nameField = new JTextField();
+        amountField = new JTextField();
+        resultArea = new JTextArea();
+        resultArea.setEditable(false);
+
+        accTypeBox = new JComboBox<>(new String[]{"Savings", "Current"});
+
+        createBtn = new JButton("Create Account");
+        depositBtn = new JButton("Deposit");
+        withdrawBtn = new JButton("Withdraw");
+        showBtn = new JButton("Show Balance");
+
+        add(new JLabel("Account Number:")); add(accNumberField);
+        add(new JLabel("Account Holder Name:")); add(nameField);
+        add(new JLabel("Account Type:")); add(accTypeBox);
+        add(createBtn);
+        add(new JLabel("Amount:")); add(amountField);
+        add(depositBtn); add(withdrawBtn); add(showBtn);
+        add(new JScrollPane(resultArea));
+
+        createBtn.addActionListener(this);
+        depositBtn.addActionListener(this);
+        withdrawBtn.addActionListener(this);
+        showBtn.addActionListener(this);
+
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setVisible(true);
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        String accNum = accNumberField.getText();
+        String name = nameField.getText();
+        String type = accTypeBox.getSelectedItem().toString();
+        String amtText = amountField.getText();
+        double amount = 0;
+
+        if (!amtText.isEmpty()) {
+            try {
+                amount = Double.parseDouble(amtText);
+            } catch (NumberFormatException ex) {
+                resultArea.setText("Invalid amount format.");
+                return;
+            }
+        }
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+
+            if (e.getSource() == createBtn) {
+                String sql = "INSERT INTO accounts (accountNumber, holderName, accountType, balance) VALUES (?, ?, ?, 0.0)";
+                PreparedStatement pst = conn.prepareStatement(sql);
+                pst.setString(1, accNum);
+                pst.setString(2, name);
+                pst.setString(3, type);
+
+                int rows = pst.executeUpdate();
+                resultArea.setText(rows > 0 ? "Account created successfully!" : "Account creation failed!");
+
+            } else if (e.getSource() == depositBtn || e.getSource() == withdrawBtn) {
+                String checkSQL = "SELECT balance FROM accounts WHERE accountNumber=?";
+                PreparedStatement check = conn.prepareStatement(checkSQL);
+                check.setString(1, accNum);
+                ResultSet rs = check.executeQuery();
+
+                if (rs.next()) {
+                    double current = rs.getDouble("balance");
+                    double newBalance;
+
+                    if (e.getSource() == depositBtn) {
+                        newBalance = current + amount;
+                    } else {
+                        if (type.equals("Current") && current - amount >= -5000 ||
+                            type.equals("Savings") && amount <= current) {
+                            newBalance = current - amount;
+                        } else {
+                            resultArea.setText("Insufficient funds or overdraft limit exceeded.");
+                            return;
+                        }
+                    }
+
+                    String updateSQL = "UPDATE accounts SET balance=? WHERE accountNumber=?";
+                    PreparedStatement update = conn.prepareStatement(updateSQL);
+                    update.setDouble(1, newBalance);
+                    update.setString(2, accNum);
+                    update.executeUpdate();
+
+                    resultArea.setText((e.getSource() == depositBtn ? "Deposited" : "Withdrawn") +
+                            " ₹" + amount + "\nNew Balance: ₹" + newBalance);
+
+                } else {
+                    resultArea.setText("Account not found.");
+                }
+
+            } else if (e.getSource() == showBtn) {
+                String showSQL = "SELECT * FROM accounts WHERE accountNumber=?";
+                PreparedStatement pst = conn.prepareStatement(showSQL);
+                pst.setString(1, accNum);
+                ResultSet rs = pst.executeQuery();
+
+                if (rs.next()) {
+                    String details = "Account Number: " + rs.getString("accountNumber") +
+                            "\nHolder Name: " + rs.getString("holderName") +
+                            "\nAccount Type: " + rs.getString("accountType") +
+                            "\nBalance: ₹" + rs.getDouble("balance");
+                    resultArea.setText(details);
+                } else {
+                    resultArea.setText("Account not found.");
+                }
+            }
+
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            resultArea.setText("Database error: " + ex.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+        new BankingSystemWithDB();
+    }
+}
