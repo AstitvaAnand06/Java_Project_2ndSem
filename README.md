@@ -1,24 +1,52 @@
-# 💳 Java Banking System with MySQL
+# 🏦 Java GUI Banking System with MySQL Integration
 
-This project is a simple banking system GUI built using Java Swing for frontend and MySQL for backend database. It supports account creation, deposit, withdrawal, and balance inquiry.
+A simple Banking System built using **Java Swing** for the GUI and **MySQL** for persistent data storage. This project demonstrates core Java concepts, JDBC integration, multi-threading with `SwingWorker`, and basic account management operations.
 
-## 🧠 Key Features
+---
 
-- GUI using AWT/Swing
-- MySQL database connectivity via JDBC
-- Account type: Savings or Current
-- Handles overdraft for current accounts (₹ -5000 limit)
-- Modular, well-commented code
+## 🚀 Features
 
-## 🏗 Database Setup
+- Create new bank accounts
+- Deposit money
+- Withdraw money with overdraft handling
+- Show account balance and details
+- Supports **Savings** and **Current** account types
+- Database error handling and UI responsiveness via multithreading
+
+---
+
+## 🖥️ Tech Stack
+
+- **Java (Swing + JDBC)**
+- **MySQL**
+- **SwingWorker** for background threading
+- **Maven/Gradle (optional for dependency management)**
+
+---
+
+## 📦 Requirements
+
+- Java JDK 11 or above
+- MySQL Server installed and running
+- MySQL JDBC Driver (Connector/J)
+- IDE (IntelliJ, Eclipse, NetBeans) or terminal for compilation
+
+---
+
+## 🔧 Setup Instructions
+
+### 🗃️ 1. Create the MySQL Database
+
+Open MySQL and run:
 
 ```sql
 CREATE DATABASE bank_db;
+
 USE bank_db;
 
 CREATE TABLE accounts (
-  accountNumber VARCHAR(20) PRIMARY KEY,
-  holderName VARCHAR(50),
-  accountType VARCHAR(20),
-  balance DOUBLE
+    accountNumber VARCHAR(20) PRIMARY KEY,
+    holderName VARCHAR(100),
+    accountType VARCHAR(20),
+    balance DOUBLE DEFAULT 0.0
 );
