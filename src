@@ -1,6 +1,3 @@
-// BankingSystemWithDB.java
-// Java GUI Banking System with MySQL Integration
-
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
@@ -13,9 +10,9 @@ public class BankingSystemWithDB extends JFrame implements ActionListener {
     private JComboBox<String> accTypeBox;
     private JButton createBtn, depositBtn, withdrawBtn, showBtn;
 
-    private final String DB_URL = "jdbc:mysql://localhost:3306/bank_db";
-    private final String USER = "root";
-    private final String PASS = "Astitva24@";
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/bank_db";
+    private static final String USER = "GUVIPROJECT";
+    private static final String PASS = "Astitva24@";
 
     public BankingSystemWithDB() {
         setTitle("Banking System - GUI + MySQL");
@@ -53,92 +50,113 @@ public class BankingSystemWithDB extends JFrame implements ActionListener {
     }
 
     public void actionPerformed(ActionEvent e) {
-        String accNum = accNumberField.getText();
-        String name = nameField.getText();
+        String accNum = accNumberField.getText().trim();
+        String name = nameField.getText().trim();
         String type = accTypeBox.getSelectedItem().toString();
-        String amtText = amountField.getText();
-        double amount = 0;
+        String amtText = amountField.getText().trim();
 
+        double amount = 0;
         if (!amtText.isEmpty()) {
             try {
                 amount = Double.parseDouble(amtText);
+                if (amount < 0) throw new NumberFormatException();
             } catch (NumberFormatException ex) {
-                resultArea.setText("Invalid amount format.");
+                resultArea.setText("Please enter a valid non-negative amount.");
                 return;
             }
         }
 
-        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+        if (accNum.isEmpty()) {
+            resultArea.setText("Account number is required.");
+            return;
+        }
 
-            if (e.getSource() == createBtn) {
-                String sql = "INSERT INTO accounts (accountNumber, holderName, accountType, balance) VALUES (?, ?, ?, 0.0)";
-                PreparedStatement pst = conn.prepareStatement(sql);
-                pst.setString(1, accNum);
-                pst.setString(2, name);
-                pst.setString(3, type);
+        if (e.getSource() == createBtn && name.isEmpty()) {
+            resultArea.setText("Name is required for account creation.");
+            return;
+        }
 
-                int rows = pst.executeUpdate();
-                resultArea.setText(rows > 0 ? "Account created successfully!" : "Account creation failed!");
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            protected Void doInBackground() {
+                try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+                    if (e.getSource() == createBtn) {
+                        String sql = "INSERT INTO accounts (accountNumber, holderName, accountType, balance) VALUES (?, ?, ?, 0.0)";
+                        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                            pst.setString(1, accNum);
+                            pst.setString(2, name);
+                            pst.setString(3, type);
+                            int rows = pst.executeUpdate();
+                            resultArea.setText(rows > 0 ? "Account created successfully!" : "Account creation failed!");
+                        }
 
-            } else if (e.getSource() == depositBtn || e.getSource() == withdrawBtn) {
-                String checkSQL = "SELECT balance FROM accounts WHERE accountNumber=?";
-                PreparedStatement check = conn.prepareStatement(checkSQL);
-                check.setString(1, accNum);
-                ResultSet rs = check.executeQuery();
+                    } else if (e.getSource() == depositBtn || e.getSource() == withdrawBtn) {
+                        String checkSQL = "SELECT accountType, balance FROM accounts WHERE accountNumber=?";
+                        try (PreparedStatement check = conn.prepareStatement(checkSQL)) {
+                            check.setString(1, accNum);
+                            ResultSet rs = check.executeQuery();
 
-                if (rs.next()) {
-                    double current = rs.getDouble("balance");
-                    double newBalance;
+                            if (rs.next()) {
+                                double current = rs.getDouble("balance");
+                                String accTypeFromDB = rs.getString("accountType");
+                                double newBalance;
 
-                    if (e.getSource() == depositBtn) {
-                        newBalance = current + amount;
-                    } else {
-                        if (type.equals("Current") && current - amount >= -5000 ||
-                            type.equals("Savings") && amount <= current) {
-                            newBalance = current - amount;
-                        } else {
-                            resultArea.setText("Insufficient funds or overdraft limit exceeded.");
-                            return;
+                                if (e.getSource() == depositBtn) {
+                                    newBalance = current + amount;
+                                } else {
+                                    if (accTypeFromDB.equals("Current") && current - amount >= -5000 ||
+                                        accTypeFromDB.equals("Savings") && amount <= current) {
+                                        newBalance = current - amount;
+                                    } else {
+                                        resultArea.setText("Insufficient funds or overdraft limit exceeded.");
+                                        return null;
+                                    }
+                                }
+
+                                String updateSQL = "UPDATE accounts SET balance=? WHERE accountNumber=?";
+                                try (PreparedStatement update = conn.prepareStatement(updateSQL)) {
+                                    update.setDouble(1, newBalance);
+                                    update.setString(2, accNum);
+                                    update.executeUpdate();
+                                }
+
+                                resultArea.setText((e.getSource() == depositBtn ? "Deposited" : "Withdrawn") +
+                                        " ₹" + amount + "\nNew Balance: ₹" + newBalance);
+                            } else {
+                                resultArea.setText("Account not found.");
+                            }
+                        }
+
+                    } else if (e.getSource() == showBtn) {
+                        String showSQL = "SELECT * FROM accounts WHERE accountNumber=?";
+                        try (PreparedStatement pst = conn.prepareStatement(showSQL)) {
+                            pst.setString(1, accNum);
+                            ResultSet rs = pst.executeQuery();
+
+                            if (rs.next()) {
+                                String details = "Account Number: " + rs.getString("accountNumber") +
+                                        "\nHolder Name: " + rs.getString("holderName") +
+                                        "\nAccount Type: " + rs.getString("accountType") +
+                                        "\nBalance: ₹" + rs.getDouble("balance");
+                                resultArea.setText(details);
+                            } else {
+                                resultArea.setText("Account not found.");
+                            }
                         }
                     }
 
-                    String updateSQL = "UPDATE accounts SET balance=? WHERE accountNumber=?";
-                    PreparedStatement update = conn.prepareStatement(updateSQL);
-                    update.setDouble(1, newBalance);
-                    update.setString(2, accNum);
-                    update.executeUpdate();
-
-                    resultArea.setText((e.getSource() == depositBtn ? "Deposited" : "Withdrawn") +
-                            " ₹" + amount + "\nNew Balance: ₹" + newBalance);
-
-                } else {
-                    resultArea.setText("Account not found.");
+                } catch (SQLException ex) {
+                    SwingUtilities.invokeLater(() -> {
+                        ex.printStackTrace();
+                        resultArea.setText("Database error: " + ex.getMessage());
+                    });
                 }
-
-            } else if (e.getSource() == showBtn) {
-                String showSQL = "SELECT * FROM accounts WHERE accountNumber=?";
-                PreparedStatement pst = conn.prepareStatement(showSQL);
-                pst.setString(1, accNum);
-                ResultSet rs = pst.executeQuery();
-
-                if (rs.next()) {
-                    String details = "Account Number: " + rs.getString("accountNumber") +
-                            "\nHolder Name: " + rs.getString("holderName") +
-                            "\nAccount Type: " + rs.getString("accountType") +
-                            "\nBalance: ₹" + rs.getDouble("balance");
-                    resultArea.setText(details);
-                } else {
-                    resultArea.setText("Account not found.");
-                }
+                return null;
             }
-
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            resultArea.setText("Database error: " + ex.getMessage());
-        }
+        };
+        worker.execute();
     }
 
     public static void main(String[] args) {
-        new BankingSystemWithDB();
+        SwingUtilities.invokeLater(BankingSystemWithDB::new);
     }
 }
